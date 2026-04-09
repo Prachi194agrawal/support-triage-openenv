@@ -4,41 +4,55 @@ emoji: 🎫
 colorFrom: blue
 colorTo: green
 sdk: docker
-app_port: 8000
+app_port: 7860
 tags:
   - openenv
 ---
 
 # Support Triage OpenEnv
 
-## Overview
-A real-world customer support triage environment built for the OpenEnv RL Challenge.
-An agent reads a customer ticket and must classify priority, route to the correct team,
-draft a compliant response, and escalate when the situation requires it.
-
-## Tasks
-
-| ID | Difficulty | Objective |
-|----|-----------|-----------|
-| easy | 🟢 Easy | Set correct ticket priority |
-| medium | 🟡 Medium | Set priority + route to correct team |
-| hard | 🔴 Hard | Priority + route + draft + escalate |
+## Overview & Motivation
+Customer support triage is a real, high-stakes task performed by humans daily.
+An agent must read a ticket, assign priority, route to the right team, draft
+a safe reply, and escalate when necessary.
 
 ## Observation Space
-Fields: `task_id`, `instruction`, `ticket_id`, `customer_message`,
-`allowed_actions`, `progress`, `last_action_error`, `reward`, `done`
+| Field | Type | Description |
+|-------|------|-------------|
+| task_id | str | Current task identifier |
+| instruction | str | What the agent must accomplish |
+| ticket_id | str | Support ticket ID |
+| customer_message | str | The customer message |
+| allowed_actions | List[str] | Valid action types |
+| progress | float | Running grader estimate 0-1 |
+| last_action_error | str | Error from last action or null |
+| reward | float | Reward from last step |
+| done | bool | Whether episode is finished |
 
 ## Action Space
-`action_type`: `analyze` | `set_priority` | `route` | `draft_reply` | `escalate` | `finish`
-`value`: string (e.g. priority level, team name, or reply text)
+| action_type | value | Effect |
+|-------------|-------|--------|
+| analyze | "" | Inspect ticket +0.05 |
+| set_priority | low/medium/high | Set ticket priority |
+| route | billing/technical/security/general | Route to team |
+| draft_reply | reply text | Draft customer reply |
+| escalate | team | Escalate to specialist |
+| finish | "" | End episode trigger grader |
+
+## Tasks
+| ID | Difficulty | Objective |
+|----|-----------|-----------|
+| easy | Easy | Set correct ticket priority |
+| medium | Medium | Set priority and route to correct team |
+| hard | Hard | Priority route safe draft and escalate |
 
 ## Reward Design
-- Correct priority: +0.15
-- Correct routing: +0.20
-- Safe draft reply (keyword hit): up to +0.25
-- Correct escalation decision: +0.20
-- Unsafe promise in reply: -0.10 penalty
-- Step overflow: -0.30 penalty
+- Correct priority +0.15 wrong -0.05
+- Correct routing +0.20 wrong -0.08
+- Draft reply per keyword hit +0.07 max +0.25
+- Correct escalation +0.20
+- Per step cost -0.02
+- Step overflow -0.30
 
 ## Setup
 ```bash
@@ -49,20 +63,20 @@ python -m server.app
 ## Docker
 ```bash
 docker build -t support-triage-openenv .
-docker run -p 8000:8000 support-triage-openenv
+docker run -p 7860:7860 support-triage-openenv
 ```
 
 ## Inference
 ```bash
-export HF_TOKEN="your_api_key"
-export API_BASE_URL="https://generativelanguage.googleapis.com/v1beta/openai/"
-export MODEL_NAME="gemini-2.0-flash"
+export HF_TOKEN="your_hf_token"
+export API_BASE_URL="https://router.huggingface.co/v1"
+export MODEL_NAME="Qwen/Qwen2.5-72B-Instruct"
 python inference.py
 ```
 
-## Baseline Scores (Gemini 2.0 Flash)
+## Baseline Scores
 | Task | Score |
 |------|-------|
-| easy | ~0.75 |
-| medium | ~0.75 |
-| hard | ~1.00 |
+| easy | 0.75 |
+| medium | 0.75 |
+| hard | 1.00 |

@@ -4,18 +4,3 @@ type: space
 runtime: fastapi
 app: server.app:app
 port: 7860
-description: Customer support triage OpenEnv — classify, route, draft, escalate tickets
-version: 0.1.0
-tags:
-  - openenv
-  - customer-support
-tasks:
-  - id: easy
-    difficulty: easy
-    objective: Assign correct priority to the support ticket
-  - id: medium
-    difficulty: medium
-    objective: Assign priority and route to the correct team
-  - id: hard
-    difficulty: hard
-    objective: Assign priority, route, draft safe reply, and escalate if required

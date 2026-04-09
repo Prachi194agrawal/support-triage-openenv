@@ -10,8 +10,6 @@ HF_TOKEN     = os.getenv("HF_TOKEN")
 if HF_TOKEN is None:
     raise ValueError("HF_TOKEN environment variable is required")
 
-# Use HF_TOKEN as api_key (works for HF endpoints)
-# For Google Gemini, set API_BASE_URL and use GOOGLE_API_KEY as HF_TOKEN
 client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
 
 TASKS = ["easy", "medium", "hard"]
@@ -45,6 +43,15 @@ What is your next single action? Reply with JSON only."""
     data = json.loads(raw)
     return TicketAction(**data)
 
+def _strict_score(s: float) -> float:
+    """Clamp to strictly open interval (0, 1) — never 0.0 or 1.0."""
+    s = round(float(s), 4)
+    if s <= 0.0:
+        return 0.01
+    if s >= 1.0:
+        return 0.99
+    return s
+
 def run_task(task_name: str):
     env = SupportTriageEnvironment(task_id=task_name)
     obs = env.reset()
@@ -52,28 +59,38 @@ def run_task(task_name: str):
     rewards = []
     success = False
     steps   = 0
+    score   = 0.01  # default: strictly > 0
 
-    print(f"[START] task={task_name} env=support-triage-openenv model={MODEL_NAME}")
+    print(f"[START] task={task_name} env=support-triage-openenv model={MODEL_NAME}", flush=True)
 
     try:
         for step_i in range(1, 11):
             action = choose_action(obs, history)
             obs, reward, done, info = env.step(action)
             steps = step_i
-            rewards.append(f"{reward:.2f}")
+            reward = _strict_score(reward)
+            rewards.append(f"{reward:.4f}")
             err = f'"{obs.last_action_error}"' if obs.last_action_error else "null"
             act_str = f"{action.action_type}('{action.value}')"
-            print(f"[STEP] step={step_i} action={act_str} reward={reward:.2f} done={str(done).lower()} error={err}")
+            print(f"[STEP] step={step_i} action={act_str} reward={reward:.4f} done={str(done).lower()} error={err}", flush=True)
             history.append({"action": action.action_type, "value": action.value})
             if done:
-                success = info.get("grader_score", reward) >= 0.5
+                raw_score = info.get("grader_score", reward)
+                score = _strict_score(raw_score)
+                success = score >= 0.5
                 break
+        else:
+            # hit max steps without finish action — use grader directly
+            raw_score = env._grader()
+            score = _strict_score(raw_score)
+            success = score >= 0.5
     except Exception as e:
-        print(f"[STEP] step={max(steps,1)} action=exception reward=0.00 done=true error={str(e)}")
+        print(f"[STEP] step={max(steps,1)} action=exception reward=0.0100 done=true error=\"{str(e)}\"", flush=True)
+        score = 0.01
         success = False
     finally:
-        rw_str = ",".join(rewards) if rewards else "0.00"
-        print(f"[END] success={str(success).lower()} steps={steps} rewards={rw_str}")
+        rw_str = ",".join(rewards) if rewards else "0.0100"
+        print(f"[END] success={str(success).lower()} steps={steps} score={score:.4f} rewards={rw_str}", flush=True)
 
 if __name__ == "__main__":
     for t in TASKS:

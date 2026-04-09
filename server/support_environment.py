@@ -86,7 +86,13 @@ class SupportTriageEnvironment:
         if team     == t["target_team"]:      score += 0.25
         if all(k in draft.lower() for k in t["draft_keywords"]): score += 0.25
         if escalated == t["must_escalate"]:   score += 0.25
-        return round(score, 2)
+        # Phase-2 requires strict range: 0 < score < 1
+        score = round(score, 2)
+        if score <= 0.0:
+            return 0.01
+        if score >= 1.0:
+            return 0.99
+        return score
 
     def step(self, action: TicketAction) -> Tuple[TicketObservation, float, bool, Dict]:
         self._last_error = None
@@ -97,8 +103,11 @@ class SupportTriageEnvironment:
         if self._state.step_count > self.max_steps:
             self._last_error = "max_steps_exceeded"
             self._state.finished = True
-            obs = self._obs(-0.30, True)
-            return obs, -0.30, True, info
+            final = 0.01
+            info["grader_score"] = final
+            self._state.progress_score = final
+            obs = self._obs(final, True)
+            return obs, final, True, info
 
         # Record action
         self._state.history.append({

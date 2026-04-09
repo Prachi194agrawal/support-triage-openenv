@@ -21,6 +21,8 @@ def root():
 
 @app.post("/reset")
 def reset(req: ResetRequest):
+    if req.task_id not in TASKS:
+        raise HTTPException(400, f"Invalid task_id: {req.task_id}. Must be one of {list(TASKS.keys())}")
     env = SupportTriageEnvironment(task_id=req.task_id)
     obs = env.reset()
     envs[env.state().episode_id] = env

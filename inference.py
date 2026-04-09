@@ -61,7 +61,7 @@ def run_task(task_name: str):
             obs, reward, done, info = env.step(action)
             steps = step_i
             rewards.append(f"{reward:.2f}")
-            err = obs.last_action_error if obs.last_action_error else "null"
+            err = f'"{obs.last_action_error}"' if obs.last_action_error else "null"
             act_str = f"{action.action_type}('{action.value}')"
             print(f"[STEP] step={step_i} action={act_str} reward={reward:.2f} done={str(done).lower()} error={err}")
             history.append({"action": action.action_type, "value": action.value})

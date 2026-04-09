@@ -46,6 +46,10 @@ class SupportTriageEnvironment:
         self._state   = None
         self._last_error = None
 
+    def _clamp_score(self, score: float) -> float:
+        """Ensure score is strictly within (0.1, 0.9)"""
+        return max(0.1, min(0.9, round(score, 2)))
+
     def reset(self) -> TicketObservation:
         task = TASKS[self.task_id]
         self._state = TicketState(
@@ -61,15 +65,18 @@ class SupportTriageEnvironment:
 
     def _obs(self, reward: float, done: bool) -> TicketObservation:
         t = self._state.current_ticket
+        # Clamp both reward and progress to (0.1, 0.9) for Phase 2 validation
+        reward = self._clamp_score(reward)
+        progress = self._clamp_score(self._state.progress_score)
         return TicketObservation(
             task_id=self.task_id,
             instruction=TASKS[self.task_id]["instruction"],
             ticket_id=t["ticket_id"],
             customer_message=t["message"],
             allowed_actions=["analyze","set_priority","route","draft_reply","escalate","finish"],
-            progress=round(self._state.progress_score, 2),
+            progress=progress,
             last_action_error=self._last_error,
-            reward=round(reward, 2),
+            reward=reward,
             done=done,
         )
 
@@ -86,13 +93,11 @@ class SupportTriageEnvironment:
         if team     == t["target_team"]:      score += 0.25
         if all(k in draft.lower() for k in t["draft_keywords"]): score += 0.25
         if escalated == t["must_escalate"]:   score += 0.25
+        
         # Phase-2 requires strict range: 0 < score < 1
-        score = round(score, 2)
-        if score <= 0.0:
-            return 0.01
-        if score >= 1.0:
-            return 0.99
-        return score
+        # Map [0.0, 0.25, 0.5, 0.75, 1.0] to [0.1, 0.3, 0.5, 0.7, 0.9]
+        score = 0.1 + (score * 0.8)  # scale to (0.1, 0.9)
+        return self._clamp_score(score)
 
     def step(self, action: TicketAction) -> Tuple[TicketObservation, float, bool, Dict]:
         self._last_error = None
@@ -103,7 +108,7 @@ class SupportTriageEnvironment:
         if self._state.step_count > self.max_steps:
             self._last_error = "max_steps_exceeded"
             self._state.finished = True
-            final = 0.01
+            final = 0.1  # minimum score for failure
             info["grader_score"] = final
             self._state.progress_score = final
             obs = self._obs(final, True)
@@ -147,10 +152,13 @@ class SupportTriageEnvironment:
             obs = self._obs(reward, True)
             return obs, reward, True, info
 
+        # Clamp intermediate rewards to (0.1, 0.9)
+        reward = self._clamp_score(reward)
+        
         # Update running progress estimate
         self._state.progress_score = max(
             self._state.progress_score,
-            min(1.0, self._grader())
+            self._clamp_score(self._grader())
         )
         obs = self._obs(reward, False)
         return obs, reward, False, info

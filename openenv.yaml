@@ -1,7 +1,11 @@
+spec_version: 1
 name: support-triage-openenv
+type: space
+runtime: fastapi
+app: server.app:app
+port: 7860
 description: Customer support triage OpenEnv — classify, route, draft, escalate tickets
 version: 0.1.0
-entrypoint: server.app:app
 tags:
   - openenv
   - customer-support
